@@ -43,7 +43,7 @@ func (w *Watch) WatchAndRun() chan error {
 	go func() {
 		for {
 			go w.watch()
-			time.Sleep(300 * time.Millisecond)
+			time.Sleep(1000 * time.Millisecond)
 		}
 	}()
 	for {

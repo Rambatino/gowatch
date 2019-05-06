@@ -6,3 +6,7 @@ export TAG
 
 test:
 	@$(GO) test ./...
+
+build-local:
+	@$(GO) build -o gowatch main.go
+	@mv gowatch ~/go/bin
