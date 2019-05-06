@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"../app"
+	"github.com/Rambatino/gowatch/app"
 	"github.com/spf13/cobra"
 )
 

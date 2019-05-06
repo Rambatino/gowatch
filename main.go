@@ -1,8 +1,6 @@
 package main
 
-import (
-	"./cmd"
-)
+import "github.com/Rambatino/gowatch/cmd"
 
 func main() {
 	cmd.Execute()
