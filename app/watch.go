@@ -18,24 +18,25 @@ type Watcher interface {
 }
 
 type Watch struct {
-	modTimes   []time.Time
-	hasChanged chan bool
-	basePath   string
-	extensions []string
-	paths      []string
-	recursive  bool
-	ignore     []string
-	args       []string
-	cmd        *exec.Cmd
+	modTimes         []time.Time
+	hasChanged       chan bool
+	basePath         string
+	extensions       []string
+	paths            []string
+	recursive        bool
+	ignoreExtensions []string
+	ignorePaths      []string
+	args             []string
+	cmd              *exec.Cmd
 }
 
-func NewWatcher(extensions, paths []string, recursive bool, ignore, args []string) (Watcher, error) {
+func NewWatcher(extensions, paths []string, recursive bool, ignoreExtensions, ignorePaths, args []string) (Watcher, error) {
 	basePath, err := os.Getwd()
 	if err != nil {
 		return &Watch{}, err
 	}
 
-	return &Watch{[]time.Time{}, make(chan bool), basePath, extensions, paths, recursive, ignore, args, nil}, nil
+	return &Watch{[]time.Time{}, make(chan bool), basePath, extensions, paths, recursive, ignoreExtensions, ignorePaths, args, nil}, nil
 }
 
 // Watch watches for changes given set of parameters. If extensions passed, will
@@ -89,7 +90,7 @@ func (w *Watch) run() {
 }
 
 func (w *Watch) watch() {
-	files, _ := files(w.basePath, w.extensions, w.paths, w.recursive, w.ignore)
+	files, _ := files(w.basePath, w.extensions, w.paths, w.recursive, w.ignoreExtensions, w.ignorePaths)
 	fileTimes := []time.Time{}
 	for _, f := range files {
 		fileTimes = append(fileTimes, f.ModTime())
@@ -100,13 +101,18 @@ func (w *Watch) watch() {
 	}
 }
 
-func files(basePath string, extensions, paths []string, recursive bool, ignore []string) ([]os.FileInfo, error) {
+func files(basePath string, extensions, paths []string, recursive bool, ignoreExtensions, ignorePaths []string) ([]os.FileInfo, error) {
 	files := []os.FileInfo{}
 	cleanedPath := filepath.Clean(basePath) + "/"
 
 	filepath.Walk(basePath, func(walkedPath string, info os.FileInfo, err error) error {
 		if !info.IsDir() {
 			relPath := strings.Replace(walkedPath, cleanedPath, "", 1)
+
+			if matchedPath(relPath, ignoreExtensions, ignorePaths) {
+				return nil
+			}
+
 			isSubDir := strings.ContainsAny(relPath, "/")
 			appended := false
 			for _, p := range paths {
@@ -119,7 +125,7 @@ func files(basePath string, extensions, paths []string, recursive bool, ignore [
 					}
 
 					for _, e := range extensions {
-						if strings.Contains(info.Name(), "."+e) {
+						if strings.HasSuffix(info.Name(), "."+e) {
 							appended = true
 							files = append(files, info)
 							continue
@@ -130,7 +136,7 @@ func files(basePath string, extensions, paths []string, recursive bool, ignore [
 			if (!isSubDir || recursive) && !appended {
 				if len(paths)+len(extensions) == 0 {
 					files = append(files, info)
-				} else if matchedPath(relPath, info, extensions) {
+				} else if matchedPath(relPath, extensions, paths) {
 					files = append(files, info)
 				}
 			}
@@ -140,9 +146,14 @@ func files(basePath string, extensions, paths []string, recursive bool, ignore [
 	return files, nil
 }
 
-func matchedPath(relPath string, fileInfo os.FileInfo, extensions []string) bool {
+func matchedPath(relPath string, extensions, paths []string) bool {
 	for _, e := range extensions {
-		if strings.Contains(fileInfo.Name(), "."+e) {
+		if strings.HasSuffix(relPath, "."+e) {
+			return true
+		}
+	}
+	for _, p := range paths {
+		if strings.HasPrefix(relPath, p) {
 			return true
 		}
 	}
