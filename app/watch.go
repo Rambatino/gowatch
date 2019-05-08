@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -60,7 +61,7 @@ func (w *Watch) WatchAndRun() chan error {
 		case changed := <-w.hasChanged:
 			if changed {
 				w.run()
-				fmt.Println("Running:", strings.Join(w.args, " "), " { pid:", w.cmd.Process.Pid, "}")
+				fmt.Println("Running:", strings.Join(w.args, " "), " { pid:", w.cmd.Process.Pid, ", fileCount: "+strconv.Itoa(len(w.modTimes))+" }")
 			}
 		}
 	}
