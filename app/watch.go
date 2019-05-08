@@ -1,12 +1,14 @@
 package app
 
 import (
-	"log"
+	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"reflect"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -23,7 +25,7 @@ type Watch struct {
 	recursive  bool
 	ignore     []string
 	args       []string
-	pid        int
+	cmd        *exec.Cmd
 }
 
 func NewWatcher(extensions, paths []string, recursive bool, ignore, args []string) (Watcher, error) {
@@ -32,7 +34,7 @@ func NewWatcher(extensions, paths []string, recursive bool, ignore, args []strin
 		return &Watch{}, err
 	}
 
-	return &Watch{[]time.Time{}, make(chan bool), basePath, extensions, paths, recursive, ignore, args, 0}, nil
+	return &Watch{[]time.Time{}, make(chan bool), basePath, extensions, paths, recursive, ignore, args, nil}, nil
 }
 
 // Watch watches for changes given set of parameters. If extensions passed, will
@@ -46,30 +48,43 @@ func (w *Watch) WatchAndRun() chan error {
 			time.Sleep(1000 * time.Millisecond)
 		}
 	}()
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	go func() {
+		<-c
+		w.terminate()
+		os.Exit(1)
+	}()
 	for {
 		select {
 		case changed := <-w.hasChanged:
 			if changed {
 				w.run()
+				fmt.Println("Running:", strings.Join(w.args, " "), " { pid:", w.cmd.Process.Pid, "}")
 			}
 		}
 	}
 }
 
-func (w *Watch) run() {
-	if w.pid != 0 {
-		proc, err := os.FindProcess(w.pid)
-		if err != nil {
-			log.Println(err)
+func (w *Watch) terminate() {
+	if w.cmd != nil {
+		pgid, err := syscall.Getpgid(w.cmd.Process.Pid)
+		if err == nil {
+			syscall.Kill(-pgid, 15) // note the minus sign
 		}
-		// Kill the process
-		proc.Kill()
+
+		w.cmd.Wait()
 	}
+}
+
+func (w *Watch) run() {
+	w.terminate()
 	cmd := exec.Command(w.args[0], w.args[1:]...)
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	w.cmd = cmd
 	cmd.Start()
-	w.pid = cmd.Process.Pid
 }
 
 func (w *Watch) watch() {
