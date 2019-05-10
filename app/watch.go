@@ -5,12 +5,9 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"path/filepath"
-	"reflect"
-	"strconv"
-	"strings"
 	"syscall"
-	"time"
+
+	"github.com/fsnotify/fsnotify"
 )
 
 type Watcher interface {
@@ -18,25 +15,35 @@ type Watcher interface {
 }
 
 type Watch struct {
-	modTimes         []time.Time
-	hasChanged       chan bool
-	basePath         string
-	extensions       []string
-	paths            []string
-	recursive        bool
-	ignoreExtensions []string
-	ignorePaths      []string
-	args             []string
-	cmd              *exec.Cmd
+	files   *files
+	args    []string
+	cmd     *exec.Cmd
+	watcher *fsnotify.Watcher
 }
 
 func NewWatcher(extensions, paths []string, recursive bool, ignoreExtensions, ignorePaths, args []string) (Watcher, error) {
-	basePath, err := os.Getwd()
+	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return &Watch{}, err
 	}
 
-	return &Watch{[]time.Time{}, make(chan bool), basePath, extensions, paths, recursive, ignoreExtensions, ignorePaths, args, nil}, nil
+	f, err := NewFiles(extensions, paths, recursive, ignoreExtensions, ignorePaths)
+	if err != nil {
+		return &Watch{}, err
+	}
+
+	w := Watch{args: args, watcher: watcher, files: f}
+	go w.listenForExit()
+
+	return &w, nil
+}
+
+func (w *Watch) listenForExit() {
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	<-c
+	w.terminate()
+	os.Exit(1)
 }
 
 // Watch watches for changes given set of parameters. If extensions passed, will
@@ -46,37 +53,29 @@ func NewWatcher(extensions, paths []string, recursive bool, ignoreExtensions, ig
 func (w *Watch) WatchAndRun() chan error {
 	go func() {
 		for {
-			go w.watch()
-			time.Sleep(1000 * time.Millisecond)
-		}
-	}()
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt)
-	go func() {
-		<-c
-		w.terminate()
-		os.Exit(1)
-	}()
-	for {
-		select {
-		case changed := <-w.hasChanged:
-			if changed {
+			select {
+			case event, ok := <-w.watcher.Events:
+				if !ok {
+					return
+				}
+				if event.Op&fsnotify.Write == fsnotify.Write {
+					w.run()
+				}
+			case err, ok := <-w.watcher.Errors:
+				if !ok {
+					return
+				}
+				fmt.Println("error:", err)
+			case <-w.files.changed:
+				for _, f := range w.files.foundFiles {
+					w.watcher.Add(f)
+				}
 				w.run()
-				fmt.Println("Running:", strings.Join(w.args, " "), " { pid:", w.cmd.Process.Pid, ", fileCount: "+strconv.Itoa(len(w.modTimes))+" }")
 			}
 		}
-	}
-}
+	}()
 
-func (w *Watch) terminate() {
-	if w.cmd != nil {
-		pgid, err := syscall.Getpgid(w.cmd.Process.Pid)
-		if err == nil {
-			syscall.Kill(-pgid, 15) // note the minus sign
-		}
-
-		w.cmd.Wait()
-	}
+	return nil
 }
 
 func (w *Watch) run() {
@@ -89,73 +88,12 @@ func (w *Watch) run() {
 	cmd.Start()
 }
 
-func (w *Watch) watch() {
-	files, _ := files(w.basePath, w.extensions, w.paths, w.recursive, w.ignoreExtensions, w.ignorePaths)
-	fileTimes := []time.Time{}
-	for _, f := range files {
-		fileTimes = append(fileTimes, f.ModTime())
-	}
-	if !reflect.DeepEqual(w.modTimes, fileTimes) {
-		w.modTimes = fileTimes
-		w.hasChanged <- true
-	}
-}
-
-func files(basePath string, extensions, paths []string, recursive bool, ignoreExtensions, ignorePaths []string) ([]os.FileInfo, error) {
-	files := []os.FileInfo{}
-	cleanedPath := filepath.Clean(basePath) + "/"
-
-	filepath.Walk(basePath, func(walkedPath string, info os.FileInfo, err error) error {
-		if !info.IsDir() {
-			relPath := strings.Replace(walkedPath, cleanedPath, "", 1)
-
-			if matchedPath(relPath, ignoreExtensions, ignorePaths) {
-				return nil
-			}
-
-			isSubDir := strings.ContainsAny(relPath, "/")
-			appended := false
-			for _, p := range paths {
-				if strings.HasPrefix(relPath, p) {
-					// if there are extensions use them, if not, add it
-					if len(extensions) == 0 {
-						appended = true
-						files = append(files, info)
-						continue
-					}
-
-					for _, e := range extensions {
-						if strings.HasSuffix(info.Name(), "."+e) {
-							appended = true
-							files = append(files, info)
-							continue
-						}
-					}
-				}
-			}
-			if (!isSubDir || recursive) && !appended {
-				if len(paths)+len(extensions) == 0 {
-					files = append(files, info)
-				} else if matchedPath(relPath, extensions, paths) {
-					files = append(files, info)
-				}
-			}
+func (w *Watch) terminate() {
+	if w.cmd != nil {
+		pgid, err := syscall.Getpgid(w.cmd.Process.Pid)
+		if err == nil {
+			syscall.Kill(-pgid, 15)
 		}
-		return nil
-	})
-	return files, nil
-}
-
-func matchedPath(relPath string, extensions, paths []string) bool {
-	for _, e := range extensions {
-		if strings.HasSuffix(relPath, "."+e) {
-			return true
-		}
+		w.cmd.Wait()
 	}
-	for _, p := range paths {
-		if strings.HasPrefix(relPath, p) {
-			return true
-		}
-	}
-	return false
 }
