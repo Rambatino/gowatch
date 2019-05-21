@@ -32,8 +32,6 @@ var flagtests = map[string]struct {
 	"all paths recursive ignore code dir":    {[]string{}, []string{}, true, []string{}, []string{"code"}, []string{"cat.sh", "lol.go", "main.go", "node_modules/run.js"}, nil},
 }
 
-//:TODO need to test ignores too
-
 func TestFiles(t *testing.T) {
 	for key, tt := range flagtests {
 		t.Run(key, func(t *testing.T) {
