@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/exec"
 	"os/signal"
-	"syscall"
 
 	"github.com/fsnotify/fsnotify"
 )
@@ -87,7 +86,7 @@ func (w *Watch) run() {
 		}
 	}
 	cmd := exec.Command(w.args[0], w.args[1:]...)
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	setProcessGroupID(cmd)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	w.cmd = cmd
