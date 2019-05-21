@@ -42,7 +42,9 @@ func (w *Watch) listenForExit() {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	<-c
-	w.terminate()
+	if err := terminateProcess(w.cmd.Process.Pid); err != nil {
+		fmt.Println(err.Error())
+	}
 	os.Exit(1)
 }
 
@@ -79,21 +81,15 @@ func (w *Watch) WatchAndRun() chan error {
 }
 
 func (w *Watch) run() {
-	w.terminate()
+	if w.cmd != nil {
+		if err := terminateProcess(w.cmd.Process.Pid); err != nil {
+			fmt.Println(err.Error())
+		}
+	}
 	cmd := exec.Command(w.args[0], w.args[1:]...)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	w.cmd = cmd
 	cmd.Start()
-}
-
-func (w *Watch) terminate() {
-	if w.cmd != nil {
-		pgid, err := syscall.Getpgid(w.cmd.Process.Pid)
-		if err == nil {
-			syscall.Kill(-pgid, 15)
-		}
-		w.cmd.Wait()
-	}
 }
