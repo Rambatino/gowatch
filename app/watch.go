@@ -41,9 +41,7 @@ func (w *Watch) listenForExit() {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 	<-c
-	if err := terminateProcess(w.cmd.Process.Pid); err != nil {
-		fmt.Println(err.Error())
-	}
+	w.terminate()
 	os.Exit(1)
 }
 
@@ -80,15 +78,21 @@ func (w *Watch) WatchAndRun() chan error {
 }
 
 func (w *Watch) run() {
-	if w.cmd != nil {
-		if err := terminateProcess(w.cmd.Process.Pid); err != nil {
-			fmt.Println(err.Error())
-		}
-	}
+	w.terminate()
 	cmd := exec.Command(w.args[0], w.args[1:]...)
 	setProcessGroupID(cmd)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	w.cmd = cmd
 	cmd.Start()
+}
+
+func (w *Watch) terminate() {
+	if w.cmd != nil {
+		if err := terminateProcess(w.cmd.Process.Pid); err != nil {
+			if err.Error() != "operation not permitted" {
+				fmt.Println(err.Error())
+			}
+		}
+	}
 }

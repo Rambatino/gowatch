@@ -64,4 +64,4 @@ Flags:
   -r, --recursive                   Whether to search recursively
 ```
 
-Passing Globs e.g. *.go as arguments to the flags will only result in issues, primarily that shells such as zsh will immediately turn *.go into, say, `main.go server.go` which will confuse the cli as it will only search for those files then.
+Passing Globs e.g. `*.go` as arguments to the flags will only result in issues, primarily that shells such as zsh will immediately turn `*.go` into, say, `main.go server.go` which will confuse the cli as it will only search for those files then.
