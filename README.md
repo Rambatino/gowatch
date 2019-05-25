@@ -2,6 +2,10 @@
 
 Tell gowatch what type of files you want watching, and then what you want to execute when those files change. There are other options out there, but the aim of this is to be as simple and all encompassing as possible.
 
+## Why
+
+I had a bad time trying out all the other (many) different CLIs for acieving this. This is super simple and easy to setup.
+
 ## How to install
 
 Via homebrew:
@@ -30,7 +34,7 @@ Available Commands:
   version     Print the version number of GoWatch
 ```
 
-### Examples
+## Examples
 ``` bash
 # rerun your go server on file changes
 gowatch run -e=go -r go run *.go
@@ -43,7 +47,7 @@ gowatch run ruby starter.rb # just read all files in top level directory
 gowatch run -e=rb ruby starter.rb # only your ruby file
 ```
 
-### All Flags
+## All Flags
 
 To access all the flags and make the most out of the command, run `gowatch run -h`
 
