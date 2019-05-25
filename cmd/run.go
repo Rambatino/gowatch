@@ -25,7 +25,7 @@ func init() {
 
 var runCmd = &cobra.Command{
 	Use:   "run",
-	Short: "Run custom function",
+	Short: "Run custom command",
 	Long:  `Runs your command with parameters`,
 	Args:  cobra.MinimumNArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {

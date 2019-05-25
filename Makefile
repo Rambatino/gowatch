@@ -21,4 +21,4 @@ build:
 
 release:
 	ghr -u Rambatino $(GHRFLAGS) v$(VERSION) pkg/$(VERSION)
-	cd homebrew && git commit -am "Updated gowatch" && git push
+	# cd homebrew && git add gowatch.rb && git commit -am "Updated gowatch" && git push
